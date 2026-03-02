@@ -206,6 +206,12 @@ if "simulate" not in st.session_state:
 if "fraud_count" not in st.session_state:
     st.session_state.fraud_count = 0
 
+# Counters only for transactions during active simulation (reset when simulation starts)
+if "simulation_tx_count" not in st.session_state:
+    st.session_state.simulation_tx_count = 0
+if "simulation_high_risk_count" not in st.session_state:
+    st.session_state.simulation_high_risk_count = 0
+
 if "risk_history" not in st.session_state:
     st.session_state.risk_history = []
 
@@ -684,12 +690,12 @@ def refresh_stats_display():
                                 with alerts_placeholder.container():
                                     st.caption("No recent fraud alerts from Redis.")
                         else:
-                            # Redis disabled/unavailable – still use API stats for total transactions
+                            # Redis disabled/unavailable – only count transactions during active simulation
                             st.warning("⚠ Redis inactive — using local session statistics")
 
-                            # Use API's total_transactions (from dataset) not just session count
-                            total_tx = stats.get("total_transactions", 0)
-                            high_risk = st.session_state.fraud_count
+                            # Show counts only from current simulation run; 0 when simulation not running
+                            total_tx = st.session_state.simulation_tx_count if st.session_state.simulate else 0
+                            high_risk = st.session_state.simulation_high_risk_count if st.session_state.simulate else 0
 
                             col1, col2 = st.columns(2)
                             with col1:
@@ -728,6 +734,8 @@ col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("▶ Start Simulation", disabled=st.session_state.simulate):
         st.session_state.simulate = True
+        st.session_state.simulation_tx_count = 0
+        st.session_state.simulation_high_risk_count = 0
         st.rerun()
 
 with col2:
@@ -1036,6 +1044,10 @@ if st.session_state.simulate:
         st.session_state.tx_history.append(record)
         st.session_state.tx_history = st.session_state.tx_history[-10:]
         st.session_state.all_transactions.append(record)
+        # Only count for real-time stats when simulation is running
+        st.session_state.simulation_tx_count = (st.session_state.simulation_tx_count or 0) + 1
+        if response.get("risk_level") == "HIGH":
+            st.session_state.simulation_high_risk_count = (st.session_state.simulation_high_risk_count or 0) + 1
 
         st.subheader("📜 Recent Transactions")
         st.table(pd.DataFrame(st.session_state.tx_history))
