@@ -9,6 +9,16 @@ fastapi
 uvicorn[standard]
 websockets
 redis
+fakeredis
 requests
 joblib
 python-multipart
+python-jose
+bcrypt
+passlib[bcrypt]
+sqlalchemy
+lightgbm
+xgboost
+shap
+Babel
+kafka-python

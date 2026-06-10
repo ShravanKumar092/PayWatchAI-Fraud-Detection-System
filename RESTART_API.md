@@ -23,19 +23,17 @@ taskkill /PID <PID_NUMBER> /F
 
 ### From Project Root (PowerShell)
 ```powershell
-cd api
-python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
 ```
 
 ### From Project Root (One Line - PowerShell)
 ```powershell
-cd api; python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
 ```
 
 ### From Project Root (Command Prompt)
 ```cmd
-cd api
-python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
 ```
 
 ---
@@ -51,22 +49,23 @@ Get-NetTCPConnection -LocalPort 8020 -ErrorAction SilentlyContinue | Select-Obje
 Start-Sleep -Seconds 2
 
 # Start the server
-cd api
-python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
 ```
 
 ---
 
-## Run Streamlit Frontend
+## Run React Frontend
 
-### From Project Root (PowerShell)
+### From Frontend Folder (PowerShell)
 ```powershell
-streamlit run app.py
+npm install
+npm run dev -- --host 127.0.0.1 --port 3000
 ```
 
-### From Project Root (Command Prompt)
+### From Frontend Folder (Command Prompt)
 ```cmd
-streamlit run app.py
+npm install
+npm run dev -- --host 127.0.0.1 --port 3000
 ```
 
 ---
@@ -78,8 +77,11 @@ streamlit run app.py
 - Docs: http://127.0.0.1:8020/docs
 - Health: http://127.0.0.1:8020/health
 
-**Streamlit App:**
-- Usually runs on: http://localhost:8501
+**React App:**
+- Usually runs on: http://127.0.0.1:3000
+
+**Legacy Streamlit App:**
+- Still available for fallback in `app.py`
 
 ---
 

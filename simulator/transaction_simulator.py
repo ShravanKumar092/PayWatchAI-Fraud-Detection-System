@@ -1,17 +1,33 @@
 import random
 import time
+from datetime import datetime
+from typing import Any, Dict, Iterator
 
-def generate_transaction():
-    transaction_types = ["PAYMENT", "TRANSFER", "CASH_OUT", "CASH_IN", "DEBIT"]
 
-    tx = {
+TRANSACTION_TYPES = ["PAYMENT", "TRANSFER", "CASH_OUT", "CASH_IN", "DEBIT"]
+
+
+def generate_transaction() -> Dict[str, Any]:
+    account_seed = random.randint(1000, 9999)
+    amount = round(random.uniform(10, 10000), 2)
+    old_origin = round(random.uniform(amount, amount + 20000), 2)
+    old_destination = round(random.uniform(0, 20000), 2)
+
+    return {
         "step": random.randint(1, 24),
-        "type": random.choice(transaction_types),
-        "amount": round(random.uniform(10, 10000), 2),
-        "oldbalanceOrg": round(random.uniform(0, 20000), 2),
-        "newbalanceOrig": round(random.uniform(0, 20000), 2),
-        "oldbalanceDest": round(random.uniform(0, 20000), 2),
-        "newbalanceDest": round(random.uniform(0, 20000), 2),
+        "type": random.choice(TRANSACTION_TYPES),
+        "amount": amount,
+        "oldbalanceOrg": old_origin,
+        "newbalanceOrig": round(max(old_origin - amount, 0.0), 2),
+        "oldbalanceDest": old_destination,
+        "newbalanceDest": round(old_destination + amount, 2),
+        "source_account": f"user-{account_seed}",
+        "destination_account": f"merchant-{random.randint(100, 999)}",
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
-    return tx
+
+def generate_stream(interval_seconds: float = 2.0) -> Iterator[Dict[str, Any]]:
+    while True:
+        yield generate_transaction()
+        time.sleep(interval_seconds)

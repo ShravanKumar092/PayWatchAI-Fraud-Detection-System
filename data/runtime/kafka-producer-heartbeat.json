@@ -1,0 +1,8 @@
+{
+  "timestamp": 1774847506.5127037,
+  "status": "healthy",
+  "error": "",
+  "topic": "paywatch-transactions",
+  "bootstrap_servers": "kafka:9092",
+  "last_payload_timestamp": "2026-03-30T05:11:46.458126"
+}

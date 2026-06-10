@@ -1,0 +1,14 @@
+{
+  "last_check_at": "2026-03-30T05:11:03.962866",
+  "last_result": {
+    "status": "error",
+    "reason": "pandas dtypes must be int, float or bool.\nFields with bad pandas dtypes: source_account: object, destination_account: object",
+    "trigger": "scheduler"
+  },
+  "last_exception": "pandas dtypes must be int, float or bool.\nFields with bad pandas dtypes: source_account: object, destination_account: object",
+  "scheduler_started_at": "2026-03-30T04:12:02.545683",
+  "check_interval_seconds": 60,
+  "frequency": "daily",
+  "drift_enabled": true,
+  "stopped_at": "2026-03-30T05:11:48.731844"
+}

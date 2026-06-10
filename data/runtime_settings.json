@@ -1,0 +1,292 @@
+{
+  "access_policy": {
+    "download_permission": "reviewers",
+    "export_policy": "admin_only",
+    "ip_allowlist": "",
+    "session_timeout_minutes": 45
+  },
+  "alert_delivery": {
+    "email_recipient": "",
+    "email_sender": "alerts@paywatch.local",
+    "require_auth": false,
+    "smtp_host": "",
+    "smtp_password": "",
+    "smtp_port": 1025,
+    "smtp_username": "",
+    "starttls": false
+  },
+  "alert_preferences": {
+    "channels": {
+      "email": true,
+      "sms": false,
+      "webhook": true
+    },
+    "quiet_hours": {
+      "enabled": false,
+      "end": "06:00",
+      "start": "22:00"
+    },
+    "severity": {
+      "critical": true,
+      "high": true,
+      "low": false,
+      "medium": true
+    }
+  },
+  "alert_workflow": {
+    "auto_merge_incidents": true,
+    "case_note_templates": [
+      {
+        "body": "Contacted customer and verified transaction intent.",
+        "id": "customer-callback",
+        "title": "Customer callback"
+      },
+      {
+        "body": "Reviewed merchant history, velocity, and linked alerts.",
+        "id": "merchant-review",
+        "title": "Merchant review"
+      }
+    ],
+    "dedupe_window_minutes": 30,
+    "escalation_policy": [
+      {
+        "auto_assign": "admin@paywatch.ai",
+        "id": "policy-critical",
+        "route_to": "fraud-war-room",
+        "severity": "critical",
+        "sla_minutes": 15
+      },
+      {
+        "auto_assign": "analyst@paywatch.ai",
+        "id": "policy-high",
+        "route_to": "tier-2-analyst",
+        "severity": "high",
+        "sla_minutes": 45
+      }
+    ],
+    "evidence_checklist": [
+      "Owner assigned",
+      "Cause tag selected",
+      "Evidence attached",
+      "Resolution note"
+    ],
+    "playbooks": [
+      {
+        "alert_type": "TRANSFER",
+        "steps": [
+          "Validate actor",
+          "Compare destination history",
+          "Attach evidence",
+          "Escalate if loss exposure exceeds policy"
+        ],
+        "title": "High-value transfer review"
+      },
+      {
+        "alert_type": "CASH_OUT",
+        "steps": [
+          "Check repeat actor",
+          "Review device velocity",
+          "Confirm merchant/customer contact"
+        ],
+        "title": "Cash-out velocity review"
+      }
+    ],
+    "similarity_threshold": 0.72,
+    "sla_policy": {
+      "critical": 15,
+      "high": 30,
+      "low": 120,
+      "medium": 45
+    },
+    "suppression_rules": [
+      {
+        "condition": "risk=LOW and repeats>=3",
+        "enabled": true,
+        "id": "repeat-destination-low-risk",
+        "name": "Suppress repeated low-risk destination chatter",
+        "window_minutes": 20
+      }
+    ]
+  },
+  "api_keys": [
+    {
+      "id": "default-ingest",
+      "last_used": "",
+      "name": "Default ingest key",
+      "status": "active"
+    }
+  ],
+  "audit_settings": {
+    "export_policy": "admin_only",
+    "masking_policy": "partial",
+    "retention_days": 90,
+    "review_logs": true
+  },
+  "backup_snapshots": [],
+  "currency": "USD",
+  "email_alerts_enabled": true,
+  "feature_flags": {
+    "anomaly_layer": true,
+    "comparison_mode": true,
+    "experimental_dashboard": true,
+    "graph_layer": true,
+    "replay_mode": true
+  },
+  "fraud_threshold_high": 0.8,
+  "fraud_threshold_medium": 0.55,
+  "integrations": {
+    "channels": {
+      "email": true,
+      "slack": false,
+      "sms": false,
+      "teams": false
+    },
+    "webhooks": [
+      {
+        "enabled": false,
+        "id": "primary-webhook",
+        "retry_policy": "3 attempts / exponential backoff",
+        "url": ""
+      }
+    ]
+  },
+  "model_access": {
+    "activation_roles": [
+      "ADMIN",
+      "SERVICE"
+    ],
+    "approval_required": true,
+    "approvers": [
+      "admin@paywatch.ai"
+    ],
+    "current_environment": "production",
+    "promotion_envs": [
+      {
+        "enabled": true,
+        "environment": "staging",
+        "requires_approval": false
+      },
+      {
+        "enabled": true,
+        "environment": "production",
+        "requires_approval": true
+      }
+    ],
+    "promotion_notes": "Champion model can be promoted after analyst and admin sign-off."
+  },
+  "model_settings": {
+    "explanation_depth": "standard",
+    "fallback_policy": "graceful",
+    "selected_model": "ensemble"
+  },
+  "notification_rules": [
+    {
+      "channel": "sms",
+      "condition": "priority>=85",
+      "enabled": true,
+      "id": "critical-sms",
+      "name": "Critical alerts to SMS",
+      "quiet_hours_bypass": true,
+      "severity": "critical"
+    },
+    {
+      "channel": "webhook",
+      "condition": "graph_score>=0.55",
+      "enabled": true,
+      "id": "high-webhook",
+      "name": "High alerts to webhook",
+      "quiet_hours_bypass": false,
+      "severity": "high"
+    }
+  ],
+  "onboarding_templates": [
+    {
+      "id": "analyst-default",
+      "name": "Analyst default",
+      "steps": [
+        "Review queue",
+        "Open drawer",
+        "Attach evidence",
+        "Close or escalate"
+      ]
+    }
+  ],
+  "permission_overrides": {},
+  "retention": {
+    "compliance_mode": "standard",
+    "evidence_retention_days": 365
+  },
+  "settings_scopes": {
+    "personal_fields": [
+      "theme",
+      "timezone",
+      "default_filters"
+    ],
+    "team_fields": [
+      "sla_policy",
+      "thresholds",
+      "exports"
+    ]
+  },
+  "sms_alerts_enabled": true,
+  "tenant_branding": {
+    "accent_primary": "#5cc8ff",
+    "accent_secondary": "#ffc14d",
+    "logo_mode": "3d-mark",
+    "org_name": "PayWatch AI",
+    "tagline": "Real-time fraud intelligence",
+    "workspace_title": "Fintech Fraud Platform"
+  },
+  "theme": "dark",
+  "theme_mode": "dark",
+  "user_preferences": {
+    "nnshravankumar@gmail.com": {
+      "alert_delivery": {
+        "email_recipient": "nnshravankumar@gmail.com",
+        "email_sender": "alerts@paywatch.local",
+        "require_auth": true,
+        "smtp_host": "smtp.gmail.com",
+        "smtp_password": "secret",
+        "smtp_port": 587,
+        "smtp_username": "demo",
+        "starttls": true
+      },
+      "alert_preferences": {
+        "channels": {
+          "email": false,
+          "sms": false,
+          "webhook": true
+        },
+        "quiet_hours": {
+          "enabled": false,
+          "end": "06:00",
+          "start": "22:00"
+        },
+        "severity": {
+          "critical": true,
+          "high": true,
+          "low": false,
+          "medium": true
+        }
+      },
+      "avatar_url": "",
+      "contact_email": "nnshravankumar@gmail.com",
+      "contact_phone": "9704519292",
+      "default_filters": {
+        "model_view": "ensemble",
+        "risk_level": "ALL",
+        "time_range": "24h",
+        "transaction_type": "ALL"
+      },
+      "display_name": "Shravan Kumar",
+      "email": "nnshravankumar@gmail.com",
+      "email_alerts_enabled": false,
+      "language": "en",
+      "notification_style": "minimal",
+      "sms_alerts_enabled": false,
+      "table_density": "comfortable",
+      "theme": "dark",
+      "timezone": "Asia/Calcutta"
+    }
+  }
+}

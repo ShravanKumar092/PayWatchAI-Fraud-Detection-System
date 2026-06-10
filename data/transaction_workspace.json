@@ -1,0 +1,62 @@
+{
+  "bookmarks": {
+    "admin@paywatch.ai": [
+      "d3fbaa0c4974c9ba"
+    ],
+    "nnshravankumar@gmail.com": [
+      "tx-24862"
+    ]
+  },
+  "casebooks": {},
+  "recent_activity": [
+    {
+      "actor": "nnshravankumar@gmail.com",
+      "description": "1 transaction(s) annotated",
+      "id": "89028694e2e4",
+      "kind": "transaction",
+      "route": "/transactions",
+      "timestamp": "2026-04-22T11:18:44.183728",
+      "title": "Transaction annotations updated"
+    },
+    {
+      "actor": "nnshravankumar@gmail.com",
+      "description": "1 transaction(s) annotated",
+      "id": "bd7a807b6ec2",
+      "kind": "transaction",
+      "route": "/transactions",
+      "timestamp": "2026-04-22T11:18:42.273594",
+      "title": "Transaction annotations updated"
+    },
+    {
+      "actor": "nnshravankumar@gmail.com",
+      "description": "1 transaction(s) annotated",
+      "id": "5e191719f14e",
+      "kind": "transaction",
+      "route": "/transactions",
+      "timestamp": "2026-04-22T11:18:38.535246",
+      "title": "Transaction annotations updated"
+    }
+  ],
+  "saved_views": {
+    "admin@paywatch.ai": [
+      {
+        "filters": {
+          "risk_level": "HIGH"
+        },
+        "id": "594ca73abbda",
+        "name": "High Risk Review",
+        "updated_at": "2026-03-26T13:21:18.704866"
+      }
+    ]
+  },
+  "shared_filters": [],
+  "tags": {
+    "admin@paywatch.ai": {
+      "d3fbaa0c4974c9ba": [
+        "watch",
+        "priority"
+      ]
+    },
+    "nnshravankumar@gmail.com": {}
+  }
+}

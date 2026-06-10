@@ -2,10 +2,30 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
+import asyncio
 import time
 import json
 import random
 from datetime import datetime
+from typing import Any
+
+try:
+    import websockets
+except Exception:
+    websockets = None
+
+
+JsonDict = dict[str, Any]
+
+
+def normalise_role(role_value: Any) -> str:
+    return str(role_value or "USER").strip().upper()
+
+
+def ensure_dict_payload(value: Any, *, fallback_error: str = "INVALID_PAYLOAD") -> JsonDict:
+    if isinstance(value, dict):
+        return value
+    return {"error": fallback_error, "message": "The backend returned an unexpected payload format."}
 
 # Decorative repeating currency-symbol background for Streamlit (subtle, behind UI)
 background_css = """
@@ -83,7 +103,7 @@ if st.session_state.page == "login" and not st.session_state.token:
             if res.status_code == 200:
                 data = res.json()
                 st.session_state.token = data["access_token"]
-                st.session_state.role = data["role"]
+                st.session_state.role = normalise_role(data.get("role"))
                 st.session_state.page = "app"
                 st.rerun()
             else:
@@ -135,7 +155,7 @@ if st.session_state.page == "register" and not st.session_state.token:
                 st.stop()
         except requests.exceptions.ConnectionError:
             st.error("❌ Cannot connect to the API server. Please make sure the server is running on http://127.0.0.1:8020")
-            st.info("💡 Start the API server with: `cd api && python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload`")
+            st.info("💡 Start the API server with: `python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload`")
             st.stop()
         except Exception as e:
             st.warning(f"⚠️ Could not verify API server: {str(e)}")
@@ -225,7 +245,7 @@ if "user_profile" not in st.session_state:
         "last_tx_time": time.time()
     }
 if "role" not in st.session_state:
-    st.session_state.role = "User"
+    st.session_state.role = "USER"
 
 if "all_transactions" not in st.session_state:
     st.session_state.all_transactions = []
@@ -241,9 +261,94 @@ if "evaluation_complete" not in st.session_state:
 # ============================================================
 PREDICT_API = "http://127.0.0.1:8020/predict"
 STREAM_API = "http://127.0.0.1:8020/stream"
+TRANSACTIONS_API = "http://127.0.0.1:8020/transactions"
 STATS_API = "http://127.0.0.1:8020/stats"
 HEALTH_API = "http://127.0.0.1:8020/health"
 WS_API = "ws://127.0.0.1:8020/ws/stream"
+
+
+async def _fetch_ws_prediction(token: str) -> JsonDict:
+    if websockets is None:
+        raise RuntimeError("The websockets dependency is not installed.")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        connection = websockets.connect(
+            WS_API,
+            extra_headers=headers,
+            open_timeout=5,
+            close_timeout=2,
+        )
+    except TypeError:
+        connection = websockets.connect(
+            WS_API,
+            additional_headers=headers,
+            open_timeout=5,
+            close_timeout=2,
+        )
+
+    async with connection as websocket:
+        payload = await asyncio.wait_for(websocket.recv(), timeout=8)
+        return ensure_dict_payload(json.loads(payload), fallback_error="WEBSOCKET_INVALID_PAYLOAD")
+
+
+def fetch_ws_prediction(token: str | None) -> JsonDict:
+    if not token:
+        return {"error": "AUTH_REQUIRED", "message": "Login is required before opening the WebSocket stream."}
+    try:
+        return ensure_dict_payload(asyncio.run(_fetch_ws_prediction(token)), fallback_error="WEBSOCKET_INVALID_PAYLOAD")
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            return ensure_dict_payload(
+                loop.run_until_complete(_fetch_ws_prediction(token)),
+                fallback_error="WEBSOCKET_INVALID_PAYLOAD",
+            )
+        finally:
+            loop.close()
+    except Exception as e:
+        return {"error": "WEBSOCKET_ERROR", "message": str(e)}
+
+
+def fetch_poll_transaction(token: str | None) -> JsonDict:
+    if not token:
+        return {"error": "AUTH_REQUIRED", "message": "Login is required before polling transactions."}
+
+    try:
+        res = requests.get(
+            TRANSACTIONS_API,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5,
+        )
+        if res.status_code != 200:
+            try:
+                error_json = res.json()
+                error_detail = error_json.get("detail", res.text)
+            except Exception:
+                error_detail = res.text
+            return {"error": f"POLLING_ERROR: {res.status_code}", "message": error_detail}
+
+        payload = ensure_dict_payload(res.json(), fallback_error="POLLING_INVALID_PAYLOAD")
+        if "error" in payload:
+            return payload
+
+        tx = payload.get("transaction")
+        if isinstance(tx, dict):
+            return tx
+
+        transactions = payload.get("transactions") or []
+        if isinstance(transactions, list):
+            for candidate in reversed(transactions):
+                if isinstance(candidate, dict):
+                    return candidate
+
+        return {"error": "POLLING_EMPTY", "message": "No transaction data was returned by the backend."}
+    except requests.exceptions.ConnectionError:
+        return {"error": "CONNECTION_ERROR", "message": "Cannot connect to the API polling endpoint."}
+    except requests.exceptions.Timeout:
+        return {"error": "TIMEOUT", "message": "The API polling endpoint took too long to respond."}
+    except Exception as e:
+        return {"error": "UNKNOWN_ERROR", "message": str(e)}
 
 
 # ============================================================
@@ -283,7 +388,7 @@ def get_api_status_message():
         else:
             return f"🔴 API Server: Error - {info}", "error"
 
-def call_fraud_api(input_data):
+def call_fraud_api(input_data: JsonDict) -> JsonDict:
     """Call fraud prediction API with improved error handling"""
     try:
         headers = {"Authorization": f"Bearer {st.session_state.token}"}
@@ -297,7 +402,10 @@ def call_fraud_api(input_data):
             except:
                 error_detail = res.text
             return {"error": f"API_ERROR: {res.status_code}", "message": error_detail}
-        return res.json()
+        payload = ensure_dict_payload(res.json(), fallback_error="INVALID_API_RESPONSE")
+        if "error" in payload:
+            return payload
+        return payload
     except requests.exceptions.ConnectionError:
         return {"error": "CONNECTION_ERROR", "message": "Cannot connect to API server. Please ensure the server is running on port 8020."}
     except requests.exceptions.Timeout:
@@ -359,14 +467,13 @@ elif status_type == "error":
     with st.expander("📋 How to Start the API Server", expanded=False):
         st.code("""
 # Option 1: Using PowerShell
-cd api
-python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
 
 # Option 2: Using the restart script
 .\\restart_api.ps1
 
 # Option 3: Using Command Prompt
-cd api && python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
         """, language="bash")
     st.info("💡 **Tip**: Keep the API server running in a separate terminal while using this dashboard.")
 else:
@@ -415,19 +522,21 @@ if st.sidebar.button("Run Test Case"):
         df_display = df
     st.table(df_display)
 
-    response = call_fraud_api(input_data)
+    test_response = call_fraud_api(input_data)
 
-    if "error" not in response:
-        prob = response.get("fraud_probability", 0)
+    if "error" not in test_response:
+        prob = test_response.get("fraud_probability", 0)
         try:
             prob = float(prob)
         except Exception:
             prob = 0.0
 
+        risk_level = str(test_response.get("risk_level", "LOW") or "LOW")
+
         confidence = abs(prob - 0.5) * 2
         confidence_pct = round(confidence * 100, 2)
 
-        st.success(f"Risk Level: {response['risk_level']}")
+        st.success(f"Risk Level: {risk_level}")
         # Show formatted amount for clarity
         try:
             amt = input_data.get('amount', 0)
@@ -438,11 +547,11 @@ if st.sidebar.button("Run Test Case"):
         st.metric("🎯 Prediction Confidence (%)", confidence_pct)
 
         with st.expander("🧠 Prediction Insights"):
-            for r in response.get("explanation", []):
+            for r in test_response.get("explanation", []):
                 st.write("•", r)
     else:
-        error_type = response.get('error', 'UNKNOWN_ERROR')
-        error_message = response.get('message', 'An unknown error occurred')
+        error_type = test_response.get('error', 'UNKNOWN_ERROR')
+        error_message = test_response.get('message', 'An unknown error occurred')
         st.error(f"❌ **Error**: {error_type}")
         if error_message:
             st.info(f"💡 {error_message}")
@@ -488,10 +597,10 @@ if submitted:
         "newbalanceDest": newbalanceDest
     }
 
-    response = call_fraud_api(payload)
+    custom_response = call_fraud_api(payload)
 
-    if "error" not in response:
-        prob = response.get("fraud_probability", 0)
+    if "error" not in custom_response:
+        prob = custom_response.get("fraud_probability", 0)
         try:
             prob = float(prob)
         except Exception:
@@ -505,16 +614,16 @@ if submitted:
         confidence = abs(prob - 0.5) * 2
         confidence_pct = round(confidence * 100, 2)
 
-        st.success(f"Risk Level: {response['risk_level']}")
+        st.success(f"Risk Level: {custom_response['risk_level']}")
         st.metric("Fraud Probability (%)", round(prob * 100, 2))
         st.metric("🎯 Prediction Confidence (%)", confidence_pct)
 
         with st.expander("🧠 Prediction Insights"):
-            for r in response.get("explanation", []):
+            for r in custom_response.get("explanation", []):
                 st.write("•", r)
     else:
-        error_type = response.get('error', 'UNKNOWN_ERROR')
-        error_message = response.get('message', 'An unknown error occurred')
+        error_type = custom_response.get('error', 'UNKNOWN_ERROR')
+        error_message = custom_response.get('message', 'An unknown error occurred')
         st.error(f"❌ **Error**: {error_type}")
         if error_message:
             st.info(f"💡 {error_message}")
@@ -535,7 +644,8 @@ if upload:
 
 
     for _, row in df.iterrows():
-        res = call_fraud_api(row.to_dict())
+        row_payload: JsonDict = {str(key): value for key, value in row.to_dict().items()}
+        res = call_fraud_api(row_payload)
         prob = res.get("fraud_probability", 0)
         try:
             prob = float(prob)
@@ -746,7 +856,7 @@ with col2:
 with col3:
     stream_mode = st.selectbox(
         "Stream Mode",
-        ["SSE (Server-Sent Events)", "Polling (Legacy)"],
+        ["WebSocket (Recommended)", "SSE (Server-Sent Events)", "Polling (Legacy)"],
         index=0,
         disabled=st.session_state.simulate
     )
@@ -767,8 +877,7 @@ if st.session_state.simulate:
             st.markdown(f"""
             **Option 1: Using PowerShell**
             ```powershell
-            cd api
-            python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+            python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
             ```
             
             **Option 2: Using the Restart Script**
@@ -778,8 +887,7 @@ if st.session_state.simulate:
             
             **Option 3: Using Command Prompt**
             ```cmd
-            cd api
-            python -m uvicorn app:app --host 127.0.0.1 --port 8020 --reload
+            python -m uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
             ```
             
             **Verify the server is running:**
@@ -805,53 +913,81 @@ if st.session_state.simulate:
         st.stop()
     
     # 🔄 REAL-TIME UPGRADE: Use SSE for better real-time experience
-    tx = None
-    if stream_mode == "SSE (Server-Sent Events)":
+    tx: JsonDict | None = None
+    response: JsonDict | None = None
+    if stream_mode == "WebSocket (Recommended)":
+        ws_payload = ensure_dict_payload(
+            fetch_ws_prediction(st.session_state.token),
+            fallback_error="WEBSOCKET_INVALID_PAYLOAD",
+        )
+        if "error" in ws_payload:
+            st.error(f"âŒ **WebSocket Error**: {ws_payload.get('error')}")
+            st.info(ws_payload.get("message", "Unable to receive a websocket transaction."))
+            st.session_state.simulate = False
+            time.sleep(2)
+            st.rerun()
+
+        tx_value = ws_payload.get("transaction")
+        prediction_value = ws_payload.get("prediction", {})
+        tx = tx_value if isinstance(tx_value, dict) else None
+        response = prediction_value if isinstance(prediction_value, dict) else {}
+        if not tx or not response:
+            st.error("âŒ **WebSocket Error**: Incomplete websocket payload received")
+            st.session_state.simulate = False
+            time.sleep(2)
+            st.rerun()
+    elif stream_mode == "SSE (Server-Sent Events)":
         try:
             # For SSE, use streaming request
-            response = requests.get(STREAM_API, stream=True, timeout=5, headers={"Accept": "text/event-stream"})
-            if response.status_code == 200:
+            stream_response = requests.get(
+                STREAM_API,
+                stream=True,
+                timeout=5,
+                headers={
+                    "Accept": "text/event-stream",
+                    "Authorization": f"Bearer {st.session_state.token}",
+                },
+            )
+            if stream_response.status_code == 200:
                 # Parse SSE format manually
-                for line in response.iter_lines(decode_unicode=True):
+                for line in stream_response.iter_lines(decode_unicode=True):
                     if line and line.startswith("data: "):
                         try:
-                            tx = json.loads(line[6:])  # Remove "data: " prefix
-                            response.close()
+                            parsed_tx = json.loads(line[6:])  # Remove "data: " prefix
+                            tx = parsed_tx if isinstance(parsed_tx, dict) else None
+                            stream_response.close()
                             break
                         except json.JSONDecodeError:
                             continue
                 
                 if tx is None:
                     st.warning(f"⚠️ SSE endpoint returned no data, falling back to polling mode")
-                    response.close()
-                    try:
-                        tx = requests.get(PREDICT_API, timeout=5, headers={"Authorization": f"Bearer {st.session_state.token}"}).json()
-                    except Exception as fallback_err:
+                    stream_response.close()
+                    poll_tx = fetch_poll_transaction(st.session_state.token)
+                    if "error" in poll_tx:
+                        fallback_err = poll_tx.get("error")
+                        st.info(poll_tx.get("message", "The backend polling fallback did not return a transaction."))
                         st.error(f"❌ Fallback failed: {str(fallback_err)}")
                         st.session_state.simulate = False
                         time.sleep(2)
                         st.rerun()
+                    tx = poll_tx
             else:
-                st.warning(f"⚠️ SSE endpoint returned status {response.status_code}, falling back to polling mode")
-                response.close()
-                try:
-                    # Generate a sample transaction
-                    sample_tx = {
-                        "step": 1,
-                        "type": "PAYMENT",
-                        "amount": 100.0,
-                        "oldbalanceOrg": 1000.0,
-                        "newbalanceOrig": 900.0,
-                        "oldbalanceDest": 500.0,
-                        "newbalanceDest": 600.0,
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    tx = sample_tx
-                except Exception as fallback_err:
+                st.warning(f"⚠️ SSE endpoint returned status {stream_response.status_code}, falling back to polling mode")
+                stream_response.close()
+                poll_tx = fetch_poll_transaction(st.session_state.token)
+                if "error" in poll_tx:
+                    fallback_err = poll_tx.get("error")
+                    st.error(f"Polling fallback failed: {poll_tx.get('error')}")
+                    st.info(poll_tx.get("message", "The backend polling fallback did not return a transaction."))
+                    st.session_state.simulate = False
+                    time.sleep(2)
+                    st.error(f"Polling fallback failed: {poll_tx.get('error')}")
                     st.error(f"❌ Error generating sample transaction: {str(fallback_err)}")
                     st.session_state.simulate = False
                     time.sleep(2)
                     st.rerun()
+                tx = poll_tx
         except requests.exceptions.ConnectionError as e:
             st.error("❌ **Connection Error**: Cannot connect to API server")
             st.info("💡 The API server may have stopped. Please check if it's running on port 8020.")
@@ -869,19 +1005,15 @@ if st.session_state.simulate:
             time.sleep(2)
             st.rerun()
     else:
-        # Legacy polling mode - generate sample transaction
+        # Legacy polling mode - fetch a transaction from the backend
         try:
-            # Generate a sample transaction for demo
-            tx = {
-                "step": random.randint(1, 24),
-                "type": random.choice(["PAYMENT", "TRANSFER", "CASH_OUT", "CASH_IN", "DEBIT"]),
-                "amount": round(random.uniform(10, 10000), 2),
-                "oldbalanceOrg": round(random.uniform(0, 20000), 2),
-                "newbalanceOrig": round(random.uniform(0, 20000), 2),
-                "oldbalanceDest": round(random.uniform(0, 20000), 2),
-                "newbalanceDest": round(random.uniform(0, 20000), 2),
-                "timestamp": datetime.now().isoformat()
-            }
+            tx = fetch_poll_transaction(st.session_state.token)
+            if "error" in tx:
+                st.error(f"Polling Error: {tx.get('error')}")
+                st.info(tx.get("message", "Please ensure the API server is running on http://127.0.0.1:8020"))
+                st.session_state.simulate = False
+                time.sleep(2)
+                st.rerun()
         except requests.exceptions.ConnectionError:
             st.error("❌ **Connection Error**: Cannot connect to API server")
             st.info("💡 Please ensure the API server is running on http://127.0.0.1:8020")
@@ -899,7 +1031,24 @@ if st.session_state.simulate:
             time.sleep(2)
             st.rerun()
     
-    response = call_fraud_api(tx)
+    if tx is None:
+        poll_tx = fetch_poll_transaction(st.session_state.token)
+        if "error" in poll_tx:
+            st.error(f"Polling Error: {poll_tx.get('error')}")
+            st.info(poll_tx.get("message", "The backend did not return a transaction."))
+            st.session_state.simulate = False
+            time.sleep(2)
+            st.rerun()
+        tx = poll_tx
+
+    if tx is None:
+        st.error("âŒ Unable to read a transaction from the backend stream.")
+        st.session_state.simulate = False
+        time.sleep(2)
+        st.rerun()
+
+    if response is None:
+        response = call_fraud_api(tx)
 
     if "error" not in response:
         prob = response.get("fraud_probability", 0)
@@ -907,6 +1056,10 @@ if st.session_state.simulate:
             prob = float(prob)
         except Exception:
             prob = 0.0
+
+        tx_amount = float(tx.get("amount", 0) or 0.0)
+        tx_type = str(tx.get("type", "UNKNOWN") or "UNKNOWN")
+        risk_level = str(response.get("risk_level", "LOW") or "LOW")
 
         confidence = abs(prob - 0.5) * 2
         confidence_pct = round(confidence * 100, 2)
@@ -923,7 +1076,7 @@ if st.session_state.simulate:
         # ====================================================
         avg_amt = st.session_state.user_profile["avg_amount"]
         if avg_amt > 0:
-            spend_drift = abs(tx["amount"] - avg_amt) / (avg_amt + 1)
+            spend_drift = abs(tx_amount - avg_amt) / (avg_amt + 1)
         else:
             spend_drift = 0
 
@@ -937,7 +1090,7 @@ if st.session_state.simulate:
         # Update behavioral profile
         st.session_state.user_profile["tx_count"] += 1
         st.session_state.user_profile["avg_amount"] = (
-            (avg_amt * (st.session_state.user_profile["tx_count"] - 1) + tx["amount"])
+            (avg_amt * (st.session_state.user_profile["tx_count"] - 1) + tx_amount)
             / st.session_state.user_profile["tx_count"]
         )
         st.session_state.user_profile["last_tx_time"] = current_time
@@ -955,7 +1108,7 @@ if st.session_state.simulate:
         if st.session_state.user_profile["risk_score"] > 1.5:
             action = "⛔ BLOCK USER (Behavioral Risk)"
         else:
-            action = decision_engine(response["risk_level"], confidence)
+            action = decision_engine(risk_level, confidence)
 
         # ====================================================
         # 🔹 UI OUTPUT (UNCHANGED STRUCTURE)
@@ -963,7 +1116,7 @@ if st.session_state.simulate:
         st.subheader("📥 Incoming Transaction")
         st.json(tx)
 
-        st.success(f"Risk Level: {response['risk_level']}")
+        st.success(f"Risk Level: {risk_level}")
         st.metric("Fraud Probability (%)", round(prob * 100, 2))
         st.metric("🎯 Prediction Confidence (%)", confidence_pct)
 
@@ -1015,7 +1168,7 @@ if st.session_state.simulate:
         # =========================
         if len(st.session_state.tx_history) >= 5:
             avg_amount = sum(t["Amount"] for t in st.session_state.tx_history) / len(st.session_state.tx_history)
-            anomaly_score = abs(tx["amount"] - avg_amount) / (avg_amount + 1)
+            anomaly_score = abs(tx_amount - avg_amount) / (avg_amount + 1)
             st.metric("📊 Anomaly Score", round(anomaly_score, 2))
 
         # =========================
@@ -1035,18 +1188,18 @@ if st.session_state.simulate:
             round(adaptive_threshold, 2)
         )
         record = {
-            "Type":tx["type"],
-            "Amount":tx["amount"],
-            "Risk":response["risk_level"],
-            "Probability":round(prob,3),
-            "Confidence (%)":confidence_pct
+            "Type": tx_type,
+            "Amount": tx_amount,
+            "Risk": risk_level,
+            "Probability": round(prob, 3),
+            "Confidence (%)": confidence_pct,
         }
         st.session_state.tx_history.append(record)
         st.session_state.tx_history = st.session_state.tx_history[-10:]
         st.session_state.all_transactions.append(record)
         # Only count for real-time stats when simulation is running
         st.session_state.simulation_tx_count = (st.session_state.simulation_tx_count or 0) + 1
-        if response.get("risk_level") == "HIGH":
+        if risk_level == "HIGH":
             st.session_state.simulation_high_risk_count = (st.session_state.simulation_high_risk_count or 0) + 1
 
         st.subheader("📜 Recent Transactions")
@@ -1074,8 +1227,7 @@ if st.session_state.simulate:
             with st.expander("📋 How to Fix", expanded=True):
                 st.code("""
 # Start the API server:
-cd api
-uvicorn app:app --host 127.0.0.1 --port 8010 --reload
+uvicorn api.app:app --host 127.0.0.1 --port 8020 --reload
                 """, language="bash")
         elif error_type == "TIMEOUT":
             st.error("❌ **Timeout Error**: API server took too long to respond")
@@ -1118,7 +1270,7 @@ if st.sidebar.button("Logout"):
 # ============================================================
 # USER DASHBOARD
 # ============================================================
-if st.session_state.role == "User":
+if normalise_role(st.session_state.role) == "USER":
     st.markdown("---")
     st.header("👤 User Dashboard – Recent Activity")
 
@@ -1130,7 +1282,7 @@ if st.session_state.role == "User":
 # ============================================================
 # ADMIN DASHBOARD
 # ============================================================
-if st.session_state.role == "Admin":
+if normalise_role(st.session_state.role) == "ADMIN":
     st.markdown("---")
     st.header("🛡 Admin Dashboard – System Monitoring")
 
@@ -1153,7 +1305,7 @@ if st.session_state.role == "Admin":
         st.info("Waiting for transactions...")
     
 
-    if st.session_state.role == "Admin" and len(st.session_state.all_transactions) > 0:
+    if normalise_role(st.session_state.role) == "ADMIN" and len(st.session_state.all_transactions) > 0:
         csv = pd.DataFrame(st.session_state.all_transactions).to_csv(index=False)
         st.download_button("⬇ Download Transaction Log (CSV)", data=csv, file_name="fraud_log.csv")
     
@@ -1164,10 +1316,3 @@ if st.session_state.role == "Admin":
 # END
 # ============================================================
 st.success("✨ Powered by PayWatch AI | Developed by Shravankumar")
-
-
-
-
-
-
-

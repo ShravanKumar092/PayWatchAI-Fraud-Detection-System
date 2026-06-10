@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <defs>
+    <linearGradient id="shell" x1="12" y1="10" x2="80" y2="86" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8ee9ff" />
+      <stop offset="0.48" stop-color="#4db6ff" />
+      <stop offset="1" stop-color="#1f3c88" />
+    </linearGradient>
+    <linearGradient id="core" x1="30" y1="18" x2="68" y2="76" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff2b0" />
+      <stop offset="0.42" stop-color="#ffcb5a" />
+      <stop offset="1" stop-color="#ff7d35" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(30 20) rotate(42) scale(48 52)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.92" />
+      <stop offset="0.38" stop-color="#9be6ff" stop-opacity="0.44" />
+      <stop offset="1" stop-color="#08111f" stop-opacity="0" />
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#020914" flood-opacity="0.48" />
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <path d="M48 6C28 6 12 16 12 30v18c0 21 16 35 36 42 20-7 36-21 36-42V30C84 16 68 6 48 6z" fill="url(#shell)" />
+    <path d="M48 12c-16 0-28 8-28 20v15c0 16 11 27 28 33 17-6 28-17 28-33V32c0-12-12-20-28-20z" fill="url(#glow)" />
+    <path d="M49 18l14 10v16L49 54 35 44V28l14-10z" fill="url(#core)" opacity="0.96" />
+    <path d="M49 18v36l14-10V28L49 18z" fill="#ffd36a" opacity="0.72" />
+    <path d="M49 18L35 28v16l14 10V18z" fill="#ffac54" opacity="0.54" />
+    <path d="M25 61c6-8 13-12 21-12 7 0 13 2 18 6 4-7 9-12 15-15" fill="none" stroke="#dff8ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="26" cy="61" r="4" fill="#9be6ff" />
+    <circle cx="46" cy="50" r="4" fill="#fff2b0" />
+    <circle cx="64" cy="55" r="4" fill="#ffcb5a" />
+    <circle cx="79" cy="39" r="4" fill="#9be6ff" />
+  </g>
+</svg>

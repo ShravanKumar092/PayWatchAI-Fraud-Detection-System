@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import traceback
 from .db import get_db
 from .models import User
 # New hashing / token utilities
@@ -87,40 +88,47 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    # Normalize email to lowercase (same as signup)
-    email = req.email.strip().lower() if req.email else ""
-    
-    if not email:
-        raise HTTPException(status_code=400, detail="Email is required")
-    if not req.password:
-        raise HTTPException(status_code=400, detail="Password is required")
-    
-    # Find user by normalized email
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    # Verify password (support both new and legacy hashes)
-    is_valid = False
     try:
-        # Try new hashing scheme first
-        is_valid = verify_password_v2(req.password, user.password)
-    except Exception:
-        is_valid = False
+        # Normalize email to lowercase (same as signup)
+        email = req.email.strip().lower() if req.email else ""
 
-    if not is_valid:
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+        if not req.password:
+            raise HTTPException(status_code=400, detail="Password is required")
+
+        # Find user by normalized email
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        # Verify password (support both new and legacy hashes)
+        is_valid = False
         try:
-            # Fallback: try legacy verifier for old accounts
-            is_valid = legacy_verify_password(req.password, user.password)
+            # Try new hashing scheme first
+            is_valid = verify_password_v2(req.password, user.password)
         except Exception:
             is_valid = False
 
-    if not is_valid:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not is_valid:
+            try:
+                # Fallback: try legacy verifier for old accounts
+                is_valid = legacy_verify_password(req.password, user.password)
+            except Exception:
+                is_valid = False
 
-    token = create_access_token({"email": user.email, "role": user.role})
-    return {
-        "status": "ok",
-        "access_token": token,
-        "role": user.role
-    }
+        if not is_valid:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        token = create_access_token({"email": user.email, "role": user.role})
+        return {
+            "status": "ok",
+            "access_token": token,
+            "role": user.role
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        print(">>> Login error:")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Login failed. Please try again.")

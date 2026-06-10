@@ -1,21 +1,36 @@
-from passlib.context import CryptContext
-from jose import jwt, JWTError
+import os
 from datetime import datetime, timedelta
+
+import bcrypt
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+
+from .security_v2 import hash_password as current_hash_password
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-SECRET_KEY = "supersecretkey"   # change later
+SECRET_KEY = os.getenv("PAYWATCH_JWT_SECRET", "paywatch-super-secret")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("PAYWATCH_ACCESS_EXPIRE_MINUTES", "60"))
 
 
 def hash_password(password: str) -> str:
-    # bcrypt hashes anything under 72 chars correctly
-    return pwd_context.hash(password)
+    return current_hash_password(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(
+            str(plain_password).encode("utf-8"),
+            str(hashed_password).encode("utf-8"),
+        )
+    except Exception:
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except Exception:
+            return False
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None):

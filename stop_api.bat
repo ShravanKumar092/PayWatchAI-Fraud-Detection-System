@@ -4,11 +4,11 @@ echo Stopping PayWatch AI API Server
 echo ========================================
 echo.
 
-REM Find and kill process on port 8010
+REM Find and kill process on port 8021
 set FOUND=0
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8010 ^| findstr LISTENING 2^>nul') do (
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8021 ^| findstr LISTENING 2^>nul') do (
     set FOUND=1
-    echo Found process on port 8010: %%a
+    echo Found process on port 8021: %%a
     taskkill /F /PID %%a >nul 2>&1
     if !errorlevel! == 0 (
         echo Process killed successfully.
@@ -18,7 +18,7 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8010 ^| findstr LISTENING 2^
 )
 
 if %FOUND% == 0 (
-    echo No process found on port 8010.
+    echo No process found on port 8021.
 )
 
 echo.

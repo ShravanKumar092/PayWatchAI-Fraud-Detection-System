@@ -2,8 +2,8 @@
 Write-Host "=== Stopping PayWatch AI API Server ===" -ForegroundColor Yellow
 Write-Host ""
 
-# Find and stop processes on port 8020
-$processes = Get-NetTCPConnection -LocalPort 8020 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess
+# Find and stop processes on port 8021
+$processes = Get-NetTCPConnection -LocalPort 8021 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess
 
 if ($processes) {
     $processes | ForEach-Object { 
@@ -13,5 +13,5 @@ if ($processes) {
     Write-Host ""
     Write-Host "Server stopped successfully!" -ForegroundColor Green
 } else {
-    Write-Host "No server found running on port 8020" -ForegroundColor Gray
+    Write-Host "No server found running on port 8021" -ForegroundColor Gray
 }

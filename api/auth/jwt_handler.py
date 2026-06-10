@@ -1,16 +1,9 @@
-import jwt
-from datetime import datetime, timedelta
+from .security_v2 import create_access_token, verify_token
 
-SECRET_KEY = "PAYWATCH_SUPER_SECRET"
-ALGORITHM = "HS256"
 
 def create_token(email, role):
-    payload = {
-        "email": email,
-        "role": role,
-        "exp": datetime.utcnow() + timedelta(hours=4)
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return create_access_token({"email": email, "role": role})
+
 
 def decode_token(token):
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return verify_token(token)
