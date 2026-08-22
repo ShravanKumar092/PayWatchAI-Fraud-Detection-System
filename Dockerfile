@@ -15,6 +15,6 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r Re
 
 COPY . .
 
-EXPOSE 8020
+EXPOSE 10000
 
-CMD ["python", "-m", "uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8020"]
+CMD ["sh", "-c", "python -m uvicorn api.app:app --host 0.0.0.0 --port ${PORT:-10000}"]
