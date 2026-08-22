@@ -46,9 +46,9 @@ function getBrowserProxyApiBaseUrl() {
   if (typeof window === "undefined" || !window.location?.origin) {
     return "";
   }
-  return shouldUseBrowserApiProxy() ? `${window.location.origin}/api` : window.location.origin;
-}
 
+  return `${window.location.origin}/api`;
+}
 function shouldUseDockerProxyOnly() {
   if (typeof window === "undefined" || !window.location) {
     return false;
